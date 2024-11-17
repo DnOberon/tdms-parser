@@ -7,6 +7,19 @@ defmodule Test.UnitTest.TDMSParserBasicTest do
   alias Test.TDMSWriter
 
   @tag unittest: true
+  test "TDMS Parser parses index files" do
+    result = Parser.parse("#{__DIR__}/data/index.tdms_index")
+
+    assert result == %TDMS.File{
+             groups: [],
+             path: "file.tdms",
+             properties: [
+               %TDMS.Property{data_type: :uint32, name: "test", value: 7}
+             ]
+           }
+  end
+
+  @tag unittest: true
   test "TDMS Parser parses file properties" do
     paths = [
       %{path: "file.tdms", properties: [%{name: "test", data_type: :uint32, value: 7}]}

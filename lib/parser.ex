@@ -19,7 +19,7 @@ defmodule TDMS.Parser do
   """
 
   @lean_in_byte_size 28
-  @tdms_file_tag "TDSm"
+  @tdms_file_tag "TDSh"
   @tdms_file_version_1 4712
   @tdms_file_version_2 4713
 
@@ -102,6 +102,18 @@ defmodule TDMS.Parser do
     end
   end
 
+  def parse_index(stream) do
+    try do
+      {:ok} = validate_tdms_file(stream)
+
+      {:ok, state, _stream} = parse(stream, State.new())
+
+      build_tdms_file_hierarchy(state)
+    catch
+      :throw, %ParseError{message: message} -> {:error, message}
+    end
+  end
+
   defp validate_tdms_file(stream) do
     case parse_lead_in(stream) do
       {:ok, :empty, _stream} ->
@@ -132,6 +144,24 @@ defmodule TDMS.Parser do
         {state, stream} = parse_metadata(stream, state)
         {state, stream} = parse_raw_data(stream, state)
         parse(stream, state)
+    end
+  end
+
+  defp parse_index(stream, state) do
+    result = parse_lead_in(stream)
+
+    case result do
+      {:ok, :empty, stream} ->
+        state = State.set_lead_in(state, nil)
+        {:ok, state, stream}
+
+      {:ok, :no_lead_in, stream} ->
+        parse_index(stream, state)
+
+      {:ok, lead_in, stream} ->
+        state = State.set_lead_in(state, lead_in)
+        {state, stream} = parse_metadata(stream, state)
+        parse_index(stream, state)
     end
   end
 
