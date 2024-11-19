@@ -350,16 +350,13 @@ defmodule TDMS.Parser do
     {number_of_values, stream} = ValueParser.parse_value(stream, :uint64, state.lead_in.endian)
 
     {vectors_length, stream} = ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
-    dbg(vectors_length)
 
     {format_changing_scalars, stream} =
       Enum.reduce(
         1..vectors_length,
         {[], stream},
         fn _x, {items, stream} ->
-          dbg("fired")
           {v_data_type, stream} = ValueParser.parse_data_type(stream, state.lead_in.endian)
-          dbg(v_data_type)
 
           {raw_buffer_index, stream} =
             ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
@@ -385,8 +382,6 @@ defmodule TDMS.Parser do
            ], stream}
         end
       )
-
-    dbg(format_changing_scalars)
 
     {raw_data_width_vectors_length, stream} =
       ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
