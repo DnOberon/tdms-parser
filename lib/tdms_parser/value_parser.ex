@@ -73,6 +73,10 @@ defmodule TDMS.Parser.ValueParser do
     {convert_to_data_type(type), stream}
   end
 
+  def parse_value(stream, :void, _endian) do
+    {nil, stream}
+  end
+
   def parse_value(stream, :string, endian) do
     parse_string(stream, endian)
   end
@@ -226,6 +230,10 @@ defmodule TDMS.Parser.ValueParser do
     |> DateTime.from_unix!()
   end
 
+  defp convert_to_data_type(0x00) do
+    :void
+  end
+
   defp convert_to_data_type(0x01) do
     :int8
   end
@@ -278,8 +286,16 @@ defmodule TDMS.Parser.ValueParser do
     :timestamp
   end
 
+  defp convert_to_data_type(0xFFFFFFFF) do
+    :daqmx_raw_data
+  end
+
   defp convert_to_data_type(value) do
     throw(ParseError.new("Unknown data type: #{value}"))
+  end
+
+  def data_type_to_property_value(:void) do
+    "DT_VOID"
   end
 
   def data_type_to_property_value(:string) do
@@ -332,5 +348,9 @@ defmodule TDMS.Parser.ValueParser do
 
   def data_type_to_property_value(:uint64) do
     "DT_UINT64"
+  end
+
+  def data_type_to_property_value(:daqmx_raw_data) do
+    "DT_DAQMXRAW"
   end
 end

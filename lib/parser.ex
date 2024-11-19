@@ -19,7 +19,8 @@ defmodule TDMS.Parser do
   """
 
   @lean_in_byte_size 28
-  @tdms_file_tag "TDSh"
+  @tdms_file_tag "TDSm"
+  @tdms_index_file_tag "TDSh"
   @tdms_file_version_1 4712
   @tdms_file_version_2 4713
 
@@ -106,7 +107,7 @@ defmodule TDMS.Parser do
     try do
       {:ok} = validate_tdms_file(stream)
 
-      {:ok, state, _stream} = parse(stream, State.new())
+      {:ok, state, _stream} = parse_index(stream, State.new())
 
       build_tdms_file_hierarchy(state)
     catch
@@ -192,6 +193,7 @@ defmodule TDMS.Parser do
 
     case tdms_tag do
       @tdms_file_tag -> parse_toc(stream_without_tdms_tag)
+      @tdms_index_file_tag -> parse_toc(stream_without_tdms_tag)
       _ -> {:ok, :no_lead_in, stream}
     end
   end
@@ -323,20 +325,90 @@ defmodule TDMS.Parser do
     end
   end
 
-  defp parse_raw_data_index(stream, _path, <<0, 0, 0, 0>>, state) do
+  defp parse_raw_data_index(stream, _path, <<0x0, 0x0, 0x0, 0x0>>, state) do
     {_empty, stream} = ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
     {:previous, stream}
   end
 
-  defp parse_raw_data_index(stream, path, <<255, 255, 255, 255>>, _state) do
+  defp parse_raw_data_index(stream, path, <<0xFF, 0xFF, 0xFF, 0xFF>>, _state) do
     {%{path: path, data_type: :double, number_of_values: 0}, stream}
   end
 
-  defp parse_raw_data_index(_stream, _path, <<69, 12, 00, 00>>, _state) do
-    throw(ParseError.new("DAQmx Format Changing Scaler Parser is not implemented"))
+  defp parse_raw_data_index(stream, path, <<0x69, 0x12, 0x0, 0x0>>, state) do
+    {data_type, stream} = ValueParser.parse_data_type(stream, state.lead_in.endian)
+
+    {array_dimension, stream} = ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
+
+    if array_dimension != 1 do
+      throw(
+        ParseError.new(
+          "In TDMS file format version 2.0, 1 is the only valid value for array dimension"
+        )
+      )
+    end
+
+    {number_of_values, stream} = ValueParser.parse_value(stream, :uint64, state.lead_in.endian)
+
+    {vectors_length, stream} = ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
+    dbg(vectors_length)
+
+    {format_changing_scalars, stream} =
+      Enum.reduce(
+        1..vectors_length,
+        {[], stream},
+        fn _x, {items, stream} ->
+          dbg("fired")
+          {v_data_type, stream} = ValueParser.parse_data_type(stream, state.lead_in.endian)
+          dbg(v_data_type)
+
+          {raw_buffer_index, stream} =
+            ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
+
+          {raw_byte_offset, stream} =
+            ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
+
+          {bitmap, stream} =
+            ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
+
+          {scale_id, stream} =
+            ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
+
+          {[
+             %{
+               data_type: v_data_type,
+               raw_buffer_index: raw_buffer_index,
+               raw_byte_offset: raw_byte_offset,
+               bitmap: bitmap,
+               scale_id: scale_id
+             }
+             | items
+           ], stream}
+        end
+      )
+
+    dbg(format_changing_scalars)
+
+    {raw_data_width_vectors_length, stream} =
+      ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
+
+    {raw_data_width, stream} =
+      Enum.reduce(1..raw_data_width_vectors_length, {[], stream}, fn _x, {items, stream} ->
+        {item, stream} = ValueParser.parse_value(stream, :uint32, state.lead_in.endian)
+
+        {[item | items], stream}
+      end)
+
+    {%{
+       path: path,
+       data_type: data_type,
+       array_dimension: array_dimension,
+       number_of_values: number_of_values,
+       format_changing_scalars: format_changing_scalars,
+       raw_data_width: raw_data_width
+     }, stream}
   end
 
-  defp parse_raw_data_index(_stream, _path, <<69, 13, 00, 00>>, _state) do
+  defp parse_raw_data_index(_stream, _path, <<0x69, 0x13, 0x0, 0x0>>, _state) do
     throw(ParseError.new("DAQmx Digital Line Scaler Parser is not implemented"))
   end
 

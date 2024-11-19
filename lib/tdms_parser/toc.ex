@@ -16,7 +16,7 @@ defmodule TDMS.Parser.ToC do
   #   | TocBigEndian       | (1L<<6) | All numeric values in the segment are big-endian formatted (if flag is not set, data is little-endian). ToC is always little-endian. |
   #   | TocNewObjList      | (1L<<2) | Segment contains new object list (e.g. channels in this segment are not the same channels the previous segment contains)             |
 
-  use Bitwise
+  import Bitwise
 
   @toc_metadata 1 <<< 1
   @toc_rawdata 1 <<< 3
